@@ -1,0 +1,4 @@
+
+[assets]
+pillow>=10.0.0
+pypdfium2>=4.30.0

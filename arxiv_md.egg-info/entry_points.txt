@@ -1,0 +1,4 @@
+[console_scripts]
+arxiv-to-md = arxiv_md.arxiv_to_md:main
+tex-ast = arxiv_md.tex.dump_ast:main
+tex-to-md = arxiv_md.tex.convert:main

@@ -110,7 +110,6 @@ def convert_path(
         asset_mode=options.asset_mode,
         raster_dpi=options.raster_dpi,
         strict=options.strict,
-        equation_appendix=options.equation_appendix,
         limits=options.limits,
     )
     tree = prepare_source_tree(source_path, output_dir, limits=options.limits)

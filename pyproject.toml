@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arxiv-md"
+version = "0.1.0"
+description = "Convert arXiv TeX sources to Markdown"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Mauro Sciancalepore", email = "maurosciancalepore98@gmail.com" }]
+keywords = ["arxiv", "latex", "markdown", "converter"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+assets = [
+    "pillow>=10.0.0",
+    "pypdfium2>=4.30.0",
+]
+
+[project.scripts]
+arxiv-to-md = "arxiv_md.arxiv_to_md:main"
+tex-ast = "arxiv_md.tex.dump_ast:main"
+tex-to-md = "arxiv_md.tex.convert:main"
+
+[tool.setuptools.packages.find]
+include = ["arxiv_md*"]
