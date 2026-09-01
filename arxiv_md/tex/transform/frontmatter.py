@@ -29,16 +29,16 @@ def extract_title(ctx: TransformContextProtocol, all_nodes: list[Node]) -> str:
 def extract_authors(ctx: TransformContextProtocol, all_nodes: list[Node]) -> list[str]:
     from arxiv_md.tex.transform.blocks import walk_all, walk_inside
 
+    names: list[str] = []
     for n in walk_all(all_nodes):
         if isinstance(n, Command) and n.name == "author" and n.args:
             raw = ctx.inline_markdown(n.args[0].children)
-            authors = split_authors(raw)
-            if authors:
-                return authors
+            names.extend(split_authors(raw))
+    if names:
+        return [name for name in names if name.strip()]
 
     for n in walk_all(all_nodes):
         if isinstance(n, Env) and n.name.endswith("authorlist"):
-            names: list[str] = []
             for sub in walk_inside(n):
                 if (
                     isinstance(sub, Command)
@@ -49,6 +49,30 @@ def extract_authors(ctx: TransformContextProtocol, all_nodes: list[Node]) -> lis
             if names:
                 return [name for name in names if name.strip()]
     return []
+
+
+def extract_author_notes(
+    ctx: TransformContextProtocol, all_nodes: list[Node]
+) -> list[str]:
+    """Collect acmart \\authornote / \\thanks prose attached to the byline.
+
+    These are affiliation/mark footnotes in the source; rendering them as a
+    quoted note under the author line keeps the text instead of letting it
+    leak as stray body paragraphs.
+    """
+    from arxiv_md.tex.transform.blocks import walk_all
+
+    notes: list[str] = []
+    for n in walk_all(all_nodes):
+        if (
+            isinstance(n, Command)
+            and n.name in {"authornote", "thanks"}
+            and n.args
+        ):
+            text = ctx.inline_markdown(n.args[0].children).strip()
+            if text and text not in notes:
+                notes.append(text)
+    return notes
 
 
 def extract_abstract(

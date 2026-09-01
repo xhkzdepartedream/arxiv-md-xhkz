@@ -43,6 +43,12 @@ _MATH_ENV_WRAPPER: dict[str, str] = {
     "multline*": "multline*",
 }
 
+# Single-line display environments keep a bare $$...$$ body; their \label is
+# re-emitted inside the block so equation numbering stays referenceable.
+_MATH_LABEL_KEEP_ENVS: frozenset[str] = frozenset(
+    {"equation", "equation*", "displaymath", "eqnarray", "eqnarray*"}
+)
+
 # Inner-math environments that always need wrapping when at top level
 _MATH_ENV_SELF_WRAP: frozenset[str] = frozenset(
     {
@@ -59,12 +65,47 @@ _MATH_ENV_SELF_WRAP: frozenset[str] = frozenset(
 )
 
 
+def render_equation_appendix(document: TexDocument) -> str:
+    """Verbatim display-math appendix for cross-checking against the source.
+
+    Lists every MathBlock (equation/align/gather/...) in document order with
+    its LaTeX body, environment name, and ``\\label`` key. Numbers follow the
+    document equation counter, so ``\\eqref`` targets in the body can be
+    matched here. Returns "" when there is no display math.
+    """
+    equations = [
+        b for b in document.blocks if isinstance(b, MathBlock) and (b.env or b.label)
+    ]
+    if not equations:
+        return ""
+    parts: list[str] = [
+        "## Equation Appendix",
+        "> Display-math environments (equation/align/gather/...) kept verbatim "
+        "from the TeX source in document order. Numbers follow the equation "
+        "counter; `\\label` keys let inline references be checked directly.",
+    ]
+    for i, eq in enumerate(equations, 1):
+        body = _katex_normalize(eq.text.strip())
+        header = f"{i}."
+        if eq.label:
+            header += f" \\label{{{eq.label}}}"
+        if eq.env:
+            header += f" — `{eq.env}`"
+        parts.append(f"**{header}**\n\n$$\n{body}\n$$")
+    return "\n\n".join(parts)
+
+
 def render_document_markdown(document: TexDocument) -> str:
     parts: list[str] = []
     if document.title:
         parts.append(f"# {document.title}")
     if document.authors:
         parts.append("*" + "; ".join(document.authors) + "*")
+    if document.author_notes:
+        note_lines = []
+        for note in document.author_notes:
+            note_lines.extend(f"> {line}" if line else ">" for line in note.splitlines())
+        parts.append("\n".join(note_lines))
     if document.abstract:
         parts.append("## Abstract")
         parts.extend(_render_block(block) for block in document.abstract)
@@ -92,6 +133,7 @@ def _render_paragraph(block: Paragraph) -> str:
 def _render_math(block: MathBlock) -> str:
     body = _katex_normalize(block.text.strip())
     env = block.env or ""
+    label = (block.label or "").strip()
     # Inner-math envs (matrix, cases) always need their own begin/end wrapper
     if env in _MATH_ENV_SELF_WRAP:
         body = f"\\begin{{{env}}}\n{body}\n\\end{{{env}}}"
@@ -99,6 +141,8 @@ def _render_math(block: MathBlock) -> str:
         wrapper = _MATH_ENV_WRAPPER.get(env)
         if wrapper is not None and ("&" in body or "\\\\" in body):
             body = f"\\begin{{{wrapper}}}\n{body}\n\\end{{{wrapper}}}"
+    if label:
+        body = f"{body}\n\\label{{{label}}}"
     return f"$$\n{body}\n$$"
 
 
@@ -207,9 +251,84 @@ def _render_table(table: Table) -> str:
     if table.parse_status == "raw_fallback" and table.raw_latex is not None:
         return _render_table_fallback(table)
     if table.sections:
+        if _can_pipe_table(table):
+            return _render_table_pipe(table)
         return _render_table_html(table)
 
     return ""
+
+
+def _can_pipe_table(table: Table) -> bool:
+    """True when a table can be losslessly expressed as a Markdown pipe table.
+
+    Pipe tables cannot represent row/column spans, row backgrounds, or
+    block-level cell content; anything needing those keeps the HTML renderer.
+    Cell bold/italic survive as `**`/`*` markers in pipe cells.
+    """
+    if not table.sections:
+        return False
+    for section in table.sections:
+        for row in section.rows:
+            if row.style and row.style.background:
+                return False
+            for cell in row.cells:
+                if cell.colspan > 1 or cell.rowspan > 1:
+                    return False
+                for block in cell.blocks:
+                    if not isinstance(block, Paragraph):
+                        return False
+    return True
+
+
+_ALIGN_DASH = {"left": ":---", "center": ":---:", "right": "---:"}
+
+
+def _pipe_cell_text(block: Paragraph) -> str:
+    text = _render_inline(block.children).replace("\n", " ").replace("|", "\\|")
+    return text.strip()
+
+
+def _render_table_pipe(table: Table) -> str:
+    caption = _render_inline(table.caption).strip()
+    out: list[str] = []
+    if caption:
+        out.append(f"*Table: {caption}*")
+
+    ncols = len(table.columns)
+    if ncols == 0:
+        ncols = max((len(r.cells) for s in table.sections for r in s.rows), default=0)
+    if ncols == 0:
+        return ""
+
+    aligns = [
+        c.align if c.align in _ALIGN_DASH else "left" for c in table.columns
+    ]
+    aligns = (aligns + ["left"] * ncols)[:ncols]
+
+    all_rows: list[TableRow] = []
+    for section in table.sections:
+        all_rows.extend(section.rows)
+
+    # Markdown pipe tables always treat the first row as the header row, so
+    # promote the first body row regardless of is_header markup.
+    header_row: TableRow | None = all_rows.pop(0) if all_rows else None
+
+    def _row_text(row: TableRow) -> str:
+        cells = [
+            _pipe_cell_text(c.blocks[0]) if c.blocks else "" for c in row.cells
+        ]
+        cells = (cells + [""] * ncols)[:ncols]
+        return "| " + " | ".join(cells) + " |"
+
+    if header_row is not None:
+        out.append(_row_text(header_row))
+        out.append("| " + " | ".join(_ALIGN_DASH.get(a, "---") for a in aligns) + " |")
+    else:
+        out.append("| " + " | ".join(["---"] * ncols) + " |")
+
+    for row in all_rows:
+        out.append(_row_text(row))
+    return "\n".join(out)
 
 
 def _render_table_fallback(table: Table) -> str:

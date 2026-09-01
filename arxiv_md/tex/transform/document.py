@@ -7,6 +7,7 @@ from arxiv_md.tex.ast import Node
 from arxiv_md.tex.handler_types import TransformContextProtocol
 from arxiv_md.tex.transform.frontmatter import (
     extract_abstract,
+    extract_author_notes,
     extract_authors,
     extract_title,
     find_document_body,
@@ -33,6 +34,7 @@ def build_document(
     body = find_document_body(nodes)
     doc.title = extract_title(ctx, nodes)
     doc.authors = extract_authors(ctx, nodes)
+    doc.author_notes = extract_author_notes(ctx, nodes)
     doc.abstract = extract_abstract(ctx, nodes, body)
     doc.blocks = walk_blocks(ctx, body)
     doc.bibliography = parse_bibliography(

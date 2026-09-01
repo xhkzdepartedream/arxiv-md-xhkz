@@ -105,6 +105,7 @@ class TexDocument:
     main_tex: Path
     title: str = ""
     authors: list[str] = field(default_factory=list)
+    author_notes: list[str] = field(default_factory=list)
     abstract: list[Block] = field(default_factory=list)
     blocks: list[Block] = field(default_factory=list)
     bibliography: list[BibEntry] = field(default_factory=list)
@@ -199,6 +200,14 @@ class ConvertOptions:
 
     Higher values produce sharper images at the cost of file size and
     rasterization time.  Only effective when ``asset_mode="rasterize"``.
+    """
+    equation_appendix: bool = True
+    """Append a verbatim equation appendix to ``document.md``.
+
+    Display-math environments (equation/align/gather/...) are emitted at the
+    end of the document in source order with their ``\\label`` keys, so readers
+    can check numbered equations and inline references against the original
+    TeX without trusting the converter's symbol normalization.
     """
     limits: ResourceLimits = field(default_factory=ResourceLimits)
 

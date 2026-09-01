@@ -97,6 +97,25 @@ class _ScanState:
         return True
 
 
+# BibTeX line-trailing % comments can split \bibitem[...]%\n from {key},
+# so allow a `]`-terminated optional label, then any amount of whitespace /
+# % comment lines before the mandatory {key} group.
+_BIBITEM_RE = re.compile(
+    r"\\bibitem(?:\[[^\]]*\])?(?:\s*%[^\n]*\n)*\s*\{([^{}]+)\}(.*)",
+    re.S,
+)
+
+
+# Real bibliography entry types only. @String/@preamble/@comment are macro
+# definitions, not citations; matching them pollutes the reference list.
+_ENTRY_TYPES: str = (
+    "article|inproceedings|conference|book|incollection|inbook|booklet|"
+    "proceedings|collection|phdthesis|mastersthesis|techreport|manual|misc|"
+    "unpublished|online|electronic|www|patent|dataset"
+)
+_ENTRY_BODY_RE = re.compile(r"([^,{}=]+),(.*?)\n\}", re.S)
+
+
 def _parse_thebibliography(text: str) -> list[BibEntry]:
     env = re.search(
         r"\\begin\{thebibliography\}(?:\{[^{}]*\})?(.*?)\\end\{thebibliography\}",
@@ -109,28 +128,72 @@ def _parse_thebibliography(text: str) -> list[BibEntry]:
     chunks = re.split(r"(?=\\bibitem)", body)
     entries: list[BibEntry] = []
     for chunk in chunks:
-        match = re.match(
-            r"\\bibitem(?:\[[^\]]*\])?\{([^{}]+)\}(.*)", chunk.strip(), re.S
-        )
+        match = _BIBITEM_RE.match(chunk.strip())
         if not match:
             continue
         key = match.group(1).strip()
-        value = _clean_latex_text(match.group(2))
+        value = _clean_latex_text(_strip_bbl_markup(match.group(2)))
         entries.append(BibEntry(key=key, text=value))
     return entries
 
 
+def _strip_bbl_markup(text: str) -> str:
+    """Strip BibTeX style markup that is not user-visible prose.
+
+    ACM-Reference-Format .bbl files wrap fields in \\bibfield{...}{...} and
+    \\bibinfo{kind}{...} and sprinkle \\natexlab / \\newblock / \\showeprint.
+    The wrapper names (author, person, year, ...) must not leak into the
+    rendered reference text. \\bibinfo content may itself contain balanced
+    braces (e.g. ``{ACM} Transactions''), so strip inner \\bibinfo first,
+    then outer \\bibfield.
+    """
+    text = re.sub(r"\\bibinfo\{[^{}]*\}\{(.*?)\}", r"\1", text, flags=re.S)
+    text = re.sub(r"\\bibfield\{[^{}]*\}\{(.*?)\}", r"\1", text, flags=re.S)
+    text = re.sub(r"\\natexlab\{[^{}]*\}", "", text)
+    text = re.sub(r"\\newblock", " ", text)
+    return text
+
+
 def _parse_bib(text: str) -> list[BibEntry]:
     entries: list[BibEntry] = []
-    for match in re.finditer(r"@\w+\s*\{\s*([^,]+),(.*?)\n\}", text, re.S):
-        key = match.group(1).strip()
-        body = match.group(2)
+    entry_start = re.compile(rf"@\s*({_ENTRY_TYPES})\s*{{", re.I)
+    for type_match in entry_start.finditer(text):
+        key, body = _read_bib_entry(text, type_match.end())
+        if key is None:
+            continue
         title = _field(body, "title")
         author = _field(body, "author")
         year = _field(body, "year")
         pieces = [piece for piece in (author, title, year) if piece]
         entries.append(BibEntry(key=key, text=". ".join(pieces)))
     return entries
+
+
+def _read_bib_entry(text: str, start: int) -> tuple[str | None, str]:
+    """Parse `{key, body}` starting at `start` (just after `@type{`)."""
+    depth = 0
+    i = start
+    while i < len(text):
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                break
+            depth -= 1
+        i += 1
+    raw = text[start:i]
+    # Split at the first top-level comma after the key.
+    depth = 0
+    for j, ch in enumerate(raw):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth = max(0, depth - 1)
+        elif ch == "," and depth == 0:
+            key = raw[:j].strip().strip("\\")
+            return (key or None), raw[j + 1 :]
+    return None, raw
 
 
 def _field(body: str, name: str) -> str:

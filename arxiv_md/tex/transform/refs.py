@@ -223,6 +223,16 @@ def _build_label_index(doc: TexDocument) -> dict[str, LabelInfo]:
                     number=str(table_no),
                     text=f"Table {table_no}",
                 )
+            for idx, sub_key in enumerate(block.sublabels):
+                if not sub_key:
+                    continue
+                suffix = chr(ord("a") + idx + 1)
+                sub_num = f"{table_no}{suffix}"
+                labels[sub_key] = LabelInfo(
+                    category="table",
+                    number=sub_num,
+                    text=f"Table {sub_num}",
+                )
         elif isinstance(block, MathBlock) and block.label:
             equation_no += 1
             labels[block.label] = LabelInfo(

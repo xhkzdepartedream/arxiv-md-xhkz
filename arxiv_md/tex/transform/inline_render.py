@@ -191,8 +191,9 @@ class InlineSerializer:
 
     def _math_md(self, node: MathSpan) -> str:
 
-        if node.rendered_text is not None:
-            return node.rendered_text
+        # Markdown output always keeps LaTeX math ($...$) so symbols stay
+        # unambiguous (`z_t` not `zₜ`). Unicode/rendered text is only a
+        # fallback for HTML/plain targets, never for the markdown body.
         body = _katex_normalize(node.tex)
 
         return f"\\({body}\\)" if "$" in body else f"${body}$"

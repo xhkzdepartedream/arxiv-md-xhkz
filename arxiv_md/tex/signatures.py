@@ -15,6 +15,10 @@ COMMAND_SIGNATURES: dict[str, str] = {
     "index": "m",
     "abstract": "m",
     "thanks": "m",
+    # acmart byline decorations; optional mark argument must be absorbed so
+    # `\authornotemark[1]` does not leak a stray `[1]` into the body.
+    "authornote": "m",
+    "authornotemark": "o",
     "and": "",
     "label": "m",
     "ref": "m",

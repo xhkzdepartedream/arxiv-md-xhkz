@@ -47,7 +47,10 @@ from arxiv_md.tex.macros import (
     strip_tex_conditionals,
 )
 from arxiv_md.tex.parser import parse as ast_parse
-from arxiv_md.tex.rendering import render_document_markdown
+from arxiv_md.tex.rendering import (
+    render_document_markdown,
+    render_equation_appendix,
+)
 from arxiv_md.tex.source import expand_source
 from arxiv_md.tex.transform.context import TransformContext
 from arxiv_md.tex.transform.document import build_document
@@ -330,6 +333,10 @@ def _convert_tree(
     markdown = render_document_markdown(document)
     if not _meaningful(markdown):
         raise NoParseableBodyError("No parseable TeX body produced")
+    if options.equation_appendix:
+        appendix = render_equation_appendix(document)
+        if appendix:
+            markdown = markdown.rstrip() + "\n\n" + appendix + "\n"
     if options.strict and warnings:
         first = warnings[0]
         raise StrictConversionError(
@@ -394,6 +401,11 @@ def build_parser(
         help=f"DPI for PDF rasterization (default: {DEFAULT_RASTER_DPI})",
     )
     parser.add_argument(
+        "--no-equation-appendix",
+        action="store_true",
+        help="Do not append the verbatim display-math appendix to document.md",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Fail when conversion warnings are emitted",
@@ -419,6 +431,7 @@ def main(argv: list[str] | None = None) -> int:
         asset_mode=args.asset_mode,
         raster_dpi=args.raster_dpi,
         strict=args.strict,
+        equation_appendix=not args.no_equation_appendix,
     )
     try:
         result = convert_path(source_path, options)

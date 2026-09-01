@@ -105,6 +105,9 @@ SKIP_BODY_COMMANDS: frozenset[str] = frozenset(
         "IEEEmembership",
         "ccsdesc",
         "keywords",
+        # acmart author notes are front-matter decorations, not body prose.
+        "authornote",
+        "authornotemark",
     }
 )
 

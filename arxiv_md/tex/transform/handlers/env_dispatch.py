@@ -69,7 +69,18 @@ CONTAINER_ENVS: frozenset[str] = frozenset(
 )
 
 FIGURE_ENVS: frozenset[str] = frozenset(
-    {"figure", "figure*", "wrapfigure", "wrapfigure*", "SCfigure", "subfloat"}
+    {
+        "figure",
+        "figure*",
+        "wrapfigure",
+        "wrapfigure*",
+        "SCfigure",
+        "subfloat",
+        # ACM acmart template; treat like a normal figure so its
+        # \label (e.g. fig:teaser) is registered for \ref resolution.
+        "teaserfigure",
+        "teaserfigure*",
+    }
 )
 
 TABLE_WRAPPER_ENVS: frozenset[str] = frozenset(

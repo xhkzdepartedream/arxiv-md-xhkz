@@ -64,7 +64,8 @@ _MULTICOL_FULL = re.compile(
 class _TableMeta:
     caption_node: Group | None
     label: str
-    tabular_env: Env | None
+    sublabels: tuple[str, ...] = ()
+    tabular_env: Env | None = None
 
 
 def _caption_arg(command: Command) -> Group | None:
@@ -93,15 +94,19 @@ def _scan_table_metadata(
     from arxiv_md.tex.transform.blocks import walk_inside
 
     caption_node: Group | None = None
-    label = ""
+    labels: list[str] = []
     tabular_env: Env | None = None
     for node in walk_inside(env):
         if isinstance(node, Command):
             caption_node = caption_node or _caption_arg(node)
-            label = label or _label_text(node, ctx)
+            text = _label_text(node, ctx)
+            if text and text not in labels:
+                labels.append(text)
         elif tabular_env is None:
             tabular_env = _tabular_env_or_none(node, tabular_envs)
-    return _TableMeta(caption_node, label, tabular_env)
+    return _TableMeta(
+        caption_node, labels[0] if labels else "", tuple(labels[1:]), tabular_env
+    )
 
 
 def _find_wrapped_tabular_env(
@@ -396,6 +401,7 @@ def _build_table_from_parsed(
     *,
     caption_ir: list | None = None,
     label: str | None = None,
+    sublabels: list[str] | None = None,
     source_env: str | None = None,
     caption_position: CaptionPosition = "unknown",
     style: TableStyle | None = None,
@@ -419,6 +425,7 @@ def _build_table_from_parsed(
         columns=columns,
         caption=caption_ir or [],
         label=label,
+        sublabels=list(sublabels or []),
         source_env=source_env or parsed.source_env,
         caption_position=caption_position,
         parse_warnings=list(parsed.parse_warnings),
@@ -432,6 +439,7 @@ def _try_build_table(
     *,
     caption_ir: list | None = None,
     label: str | None = None,
+    sublabels: list[str] | None = None,
     source_env: str | None = None,
     caption_position: CaptionPosition = "unknown",
     style: TableStyle | None = None,
@@ -454,6 +462,7 @@ def _try_build_table(
             ctx,
             caption_ir=caption_ir,
             label=label,
+            sublabels=sublabels,
             source_env=source_env,
             caption_position=caption_position,
             style=style,
@@ -469,6 +478,7 @@ def _try_build_from_candidates(
     *,
     caption_ir: list | None,
     label: str | None,
+    sublabels: list[str] | None = None,
     source_env: str,
     caption_position: CaptionPosition,
     style: TableStyle | None,
@@ -479,6 +489,7 @@ def _try_build_from_candidates(
             ctx,
             caption_ir=caption_ir,
             label=label,
+            sublabels=sublabels,
             source_env=source_env,
             caption_position=caption_position,
             style=style,
@@ -607,6 +618,7 @@ def table_wrapper_env(env: Env, ctx: TransformContextProtocol) -> list[Block]:
         ctx,
         caption_ir=caption_ir,
         label=meta.label or None,
+        sublabels=list(meta.sublabels) if meta.sublabels else None,
         source_env=env.name,
         caption_position=cap_pos,
         style=style,
@@ -623,6 +635,7 @@ def table_wrapper_env(env: Env, ctx: TransformContextProtocol) -> list[Block]:
             raw_latex=ctx.env_full_raw(env).strip(),
             caption=caption_ir,
             label=meta.label or None,
+            sublabels=list(meta.sublabels),
             source_env=env.name,
             caption_position=cap_pos,
             style=style,
@@ -634,15 +647,17 @@ def longtable_env(env: Env, ctx: TransformContextProtocol) -> list[Block]:
     from arxiv_md.tex.transform.blocks import walk_inside
 
     caption_node: Group | None = None
-    label = ""
+    labels: list[str] = []
 
     cap_pos = _longtable_caption_position(env.body)
     for n in walk_inside(env):
         if isinstance(n, Command):
             if n.name == "caption" and n.args and caption_node is None:
                 caption_node = n.args[0]
-            elif n.name == "label" and n.args and not label:
-                label = ctx.inline_markdown(n.args[0].children).strip()
+            elif n.name == "label" and n.args:
+                text = ctx.inline_markdown(n.args[0].children).strip()
+                if text and text not in labels:
+                    labels.append(text)
     caption_ir = ctx.inline_ir(caption_node.children) if caption_node else []
 
     raw = ctx.env_full_raw(env)
@@ -651,7 +666,8 @@ def longtable_env(env: Env, ctx: TransformContextProtocol) -> list[Block]:
             raw,
             ctx,
             caption_ir=caption_ir,
-            label=label or None,
+            label=labels[0] if labels else None,
+            sublabels=list(labels[1:]) if len(labels) > 1 else None,
             source_env=env.name,
             caption_position=cap_pos,
         )
@@ -670,7 +686,8 @@ def longtable_env(env: Env, ctx: TransformContextProtocol) -> list[Block]:
             parse_status="raw_fallback",
             raw_latex=raw.strip() if raw else "",
             caption=caption_ir,
-            label=label or None,
+            label=labels[0] if labels else None,
+            sublabels=list(labels[1:]),
             source_env=env.name,
             caption_position=cap_pos,
         )
@@ -683,16 +700,19 @@ def tabular_standalone(env: Env, ctx: TransformContextProtocol) -> list[Block]:
     raw = ctx.env_full_raw(env)
     if not raw:
         return []
-    label = ""
+    labels: list[str] = []
     for n in walk_inside(env):
-        if isinstance(n, Command) and n.name == "label" and n.args and not label:
-            label = ctx.inline_markdown(n.args[0].children).strip()
+        if isinstance(n, Command) and n.name == "label" and n.args:
+            text = ctx.inline_markdown(n.args[0].children).strip()
+            if text and text not in labels:
+                labels.append(text)
 
     table = _try_build_table(
         raw,
         ctx,
         caption_ir=[],
-        label=label or None,
+        label=labels[0] if labels else None,
+        sublabels=list(labels[1:]) if len(labels) > 1 else None,
         source_env=env.name,
     )
     if table is not None:
@@ -706,7 +726,8 @@ def tabular_standalone(env: Env, ctx: TransformContextProtocol) -> list[Block]:
             parse_status="raw_fallback",
             raw_latex=raw.strip(),
             caption=[],
-            label=label or None,
+            label=labels[0] if labels else None,
+            sublabels=list(labels[1:]),
             source_env=env.name,
         )
     ]

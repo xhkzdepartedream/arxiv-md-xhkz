@@ -254,6 +254,7 @@ class Table:
     columns: list[TableColumn] = field(default_factory=list)
     caption: list[InlineNode] = field(default_factory=list)
     label: str | None = None
+    sublabels: list[str] = field(default_factory=list)
     raw_latex: str | None = None
     source_env: str | None = None
     caption_position: CaptionPosition = "unknown"
