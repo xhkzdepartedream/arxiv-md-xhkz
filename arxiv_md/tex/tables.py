@@ -395,6 +395,16 @@ def _skip_row_break_tail(text: str, pos: int) -> int:
     return i
 
 
+def _is_comment_marker(body: str, i: int) -> bool:
+    """True when body[i] == '%' is an unescaped LaTeX comment start."""
+    backslashes = 0
+    j = i - 1
+    while j >= 0 and body[j] == "\\":
+        backslashes += 1
+        j -= 1
+    return backslashes % 2 == 0
+
+
 def _split_rows_aware(body: str) -> list[str]:
     rows: list[str] = []
     current: list[str] = []
@@ -403,6 +413,13 @@ def _split_rows_aware(body: str) -> list[str]:
     n = len(body)
 
     while i < n:
+        if body[i] == "%" and _is_comment_marker(body, i):
+            # LaTeX comment: unescaped % swallows the rest of the line.
+            # A fully commented row (e.g. "% & \textbf{Latency} ... \\")
+            # must not leak a phantom empty row into the rendered table.
+            while i < n and body[i] != "\n":
+                i += 1
+            continue
         if (
             body[i] == "\\"
             and i + 1 < n

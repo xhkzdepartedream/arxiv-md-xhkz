@@ -28,6 +28,10 @@ from arxiv_md.tex.transform.math_text import katex_normalize as _katex_normalize
 
 _RENDER_SERIALIZER = InlineSerializer(ref_style="bracket")
 
+# id(block) -> (kind, number) filled during render_document_markdown so table
+# and figure captions can carry their document number (Table 2, Figure 3).
+_BLOCK_NUMBERS: dict[int, tuple[str, str]] = {}
+
 
 _MATH_ENV_WRAPPER: dict[str, str] = {
     "align": "align",
@@ -96,6 +100,17 @@ def render_equation_appendix(document: TexDocument) -> str:
 
 
 def render_document_markdown(document: TexDocument) -> str:
+    _BLOCK_NUMBERS.clear()
+    table_no = 0
+    figure_no = 0
+    for block in document.blocks:
+        if isinstance(block, Table):
+            table_no += 1
+            _BLOCK_NUMBERS[id(block)] = ("Table", str(table_no))
+        elif isinstance(block, Figure):
+            figure_no += 1
+            _BLOCK_NUMBERS[id(block)] = ("Figure", str(figure_no))
+
     parts: list[str] = []
     if document.title:
         parts.append(f"# {document.title}")
@@ -114,6 +129,7 @@ def render_document_markdown(document: TexDocument) -> str:
         parts.append("## References")
         parts.extend(_render_bib(entry) for entry in document.bibliography)
     markdown = "\n\n".join(part.strip() for part in parts if part and part.strip())
+    _BLOCK_NUMBERS.clear()
     return markdown.rstrip() + "\n"
 
 
@@ -247,6 +263,11 @@ def _sanitize_css_value(value: str) -> str | None:
 _SECTION_TAG = {"head": "thead", "foot": "tfoot", "body": "tbody"}
 
 
+def _num_prefix(block: Table | Figure) -> str:
+    info = _BLOCK_NUMBERS.get(id(block))
+    return f"{info[0]} {info[1]}:" if info else ""
+
+
 def _render_table(table: Table) -> str:
     if table.parse_status == "raw_fallback" and table.raw_latex is not None:
         return _render_table_fallback(table)
@@ -290,9 +311,10 @@ def _pipe_cell_text(block: Paragraph) -> str:
 
 def _render_table_pipe(table: Table) -> str:
     caption = _render_inline(table.caption).strip()
+    prefix = _num_prefix(table)
     out: list[str] = []
     if caption:
-        out.append(f"*Table: {caption}*")
+        out.append(f"*{prefix} {caption}*" if prefix else f"*{caption}*")
 
     ncols = len(table.columns)
     if ncols == 0:
@@ -353,6 +375,9 @@ def _render_table_html(table: Table) -> str:
     if table.caption:
         caption_html = _RENDER_SERIALIZER.serialize(table.caption, target="html")
         if caption_html:
+            prefix = _num_prefix(table)
+            if prefix:
+                caption_html = f"<strong>{prefix}</strong> " + caption_html
             out.append(f"<caption>{caption_html}</caption>")
 
     colgroup = _render_colgroup(table.columns)
@@ -506,6 +531,9 @@ def _render_figure(block: Figure) -> str:
     caption = _render_inline(block.caption).strip()
 
     sources = list(block.images) if block.images else list(block.graphics)
+    prefix = _num_prefix(block)
+    if caption and prefix:
+        caption = f"{prefix} {caption}"
     parts: list[str] = []
     for src in sources:
         parts.append(f"![{caption}]({src})")
@@ -516,6 +544,9 @@ def _render_figure(block: Figure) -> str:
 
 def _render_raw_figure_placeholder(block: Figure) -> str:
     caption = _render_inline(block.caption).strip()
+    prefix = _num_prefix(block)
+    if caption and prefix:
+        caption = f"{prefix} {caption}"
     kind = _raw_figure_kind(block.raw_latex or "")
     placeholder = f"[{kind} figure: {caption}]" if caption else f"[{kind} figure]"
     summary = f"Show {kind} source"

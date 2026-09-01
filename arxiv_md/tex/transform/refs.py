@@ -223,15 +223,16 @@ def _build_label_index(doc: TexDocument) -> dict[str, LabelInfo]:
                     number=str(table_no),
                     text=f"Table {table_no}",
                 )
-            for idx, sub_key in enumerate(block.sublabels):
+            # Secondary labels on the same table environment (e.g. one label
+            # before and one inside the tabular) are aliases of the SAME table,
+            # not sub-tables: they keep the same number (Table N), never N a/b.
+            for sub_key in block.sublabels:
                 if not sub_key:
                     continue
-                suffix = chr(ord("a") + idx + 1)
-                sub_num = f"{table_no}{suffix}"
                 labels[sub_key] = LabelInfo(
                     category="table",
-                    number=sub_num,
-                    text=f"Table {sub_num}",
+                    number=str(table_no),
+                    text=f"Table {table_no}",
                 )
         elif isinstance(block, MathBlock) and block.label:
             equation_no += 1
