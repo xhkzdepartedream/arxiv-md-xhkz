@@ -54,7 +54,7 @@ uv tool install --from . arxiv-md-xhkz --with "arxiv-md-xhkz[assets]"
 arxiv-to-md 2506.04225 --outdir ./papers
 
 # 搜索并转换 Top 3
-arxiv-to-md --top-k 3 "world consistent video diffusion" --outdir ./papers
+arxiv-to-md --top-k 3 "agent memory" --outdir ./papers
 
 # 转换本地 .tex / 目录 / 源码压缩包
 tex-to-md paper.tex --outdir ./out
