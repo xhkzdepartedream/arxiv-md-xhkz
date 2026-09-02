@@ -3,16 +3,19 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "arxiv-md"
-version = "0.1.0"
-description = "Convert arXiv TeX sources to Markdown"
+name = "arxiv-md-xhkz"
+version = "0.1.1"
+description = "Convert arXiv TeX sources to Markdown (community fork with transcription-quality fixes)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "Mauro Sciancalepore", email = "maurosciancalepore98@gmail.com" }]
+license = { file = "LICENSE" }
+authors = [
+    { name = "Mauro Sciancalepore", email = "maurosciancalepore98@gmail.com" },
+    { name = "xhkzdepartedream" },
+]
 keywords = ["arxiv", "latex", "markdown", "converter"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -33,6 +36,10 @@ assets = [
     "pillow>=10.0.0",
     "pypdfium2>=4.30.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/xhkzdepartedream/arxiv-md-xhkz"
+Homepage = "https://github.com/xhkzdepartedream/arxiv-md-xhkz"
 
 [project.scripts]
 arxiv-to-md = "arxiv_md.arxiv_to_md:main"
