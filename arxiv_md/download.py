@@ -2,26 +2,21 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from urllib import error, parse, request
+from urllib import error, parse
 
 from arxiv_md.cli_output import emit_error, emit_ok
+# USER_AGENT 仍从此模块转发，保持既有 import 路径可用。
+from arxiv_md.http import USER_AGENT, fetch_bytes, fetch_to_file  # noqa: F401
 
 ATOM_NS = "http://www.w3.org/2005/Atom"
 API_URLS = (
     "https://export.arxiv.org/api/query",
     "http://export.arxiv.org/api/query",
 )
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
-
 ID_RE = re.compile(
     r"^(?:arXiv:)?(?:\d{4}\.\d{4,5}|[a-z.-]+/\d{7})(?:v\d+)?$",
     re.IGNORECASE,
@@ -57,16 +52,12 @@ def is_arxiv_id(value: str) -> bool:
 
 
 def fetch_feed(url: str) -> ET.Element:
-    req = request.Request(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
-        },
-    )
     try:
-        with request.urlopen(req, timeout=60) as resp:
-            payload = resp.read()
+        payload = fetch_bytes(
+            url,
+            timeout=60,
+            accept="application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
+        )
     except error.HTTPError as exc:
         raise RuntimeError(f"arXiv API request failed: HTTP {exc.code}") from exc
     except error.URLError as exc:
@@ -121,10 +112,8 @@ def parse_feed(feed: ET.Element) -> list[Paper]:
 
 
 def download_pdf(url: str, destination: Path) -> None:
-    req = request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with request.urlopen(req, timeout=120) as resp, destination.open("wb") as fh:
-            shutil.copyfileobj(resp, fh)
+        fetch_to_file(url, destination, timeout=120)
     except error.HTTPError as exc:
         raise RuntimeError(f"PDF download failed: HTTP {exc.code}") from exc
     except error.URLError as exc:

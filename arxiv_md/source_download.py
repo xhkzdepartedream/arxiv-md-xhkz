@@ -4,9 +4,10 @@ import gzip
 import shutil
 from io import BytesIO
 from pathlib import Path
-from urllib import error, request
+from urllib import error
 
-from arxiv_md.download import USER_AGENT, base_arxiv_id, safe_filename
+from arxiv_md.download import base_arxiv_id, safe_filename
+from arxiv_md.http import fetch_bytes
 
 
 def source_url(arxiv_id: str) -> str:
@@ -16,10 +17,13 @@ def source_url(arxiv_id: str) -> str:
 def download_source(arxiv_id: str, destination: Path) -> Path | None:
     destination = destination.expanduser()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    req = request.Request(source_url(arxiv_id), headers={"User-Agent": USER_AGENT})
+    base_id = base_arxiv_id(arxiv_id)
     try:
-        with request.urlopen(req, timeout=120) as resp:
-            payload = resp.read()
+        payload = fetch_bytes(
+            source_url(arxiv_id),
+            timeout=120,
+            referer=f"https://arxiv.org/abs/{base_id}",
+        )
     except error.HTTPError as exc:
         if exc.code == 404:
             return None
